@@ -1,5 +1,6 @@
-import ./bindings
 import std/strformat
+
+import zmq/bindings
 
 # Unofficial easier-for-Nim API
 
@@ -11,7 +12,7 @@ type
                                 ## errno value code
     error*: cint
 
-  ZConnection* {.pure, final.} = object
+  ZConnection* {.pure, final, byRef.} = object
     ## A Zmq connection. Since ``ZContext`` and ``ZSocket`` are pointers, it is highly recommended to **not** copy ``ZConnection``.
     context*: ZContext ## Zmq context. Can be 'owned' by another connection (useful for inproc protocol).
     socket*: ZSocket   ## Embedded socket.
@@ -47,7 +48,14 @@ proc newZContext*(): ZContext =
   ## Create a new ZContext
   result = ctx_new()
 
-proc newZContext*(option: int, optval: int): ZContext =
+proc newZContext*(option: int, optval: int): ZContext {.
+  deprecated: "Prefer ZContextOptions instead of ZMQ_ prefixed consts".} =
+  ## Create a new ZContext and set its options
+  result = newZContext()
+  if result.ctx_set(option.cint, optval.cint) != 0:
+    zmqError()
+
+proc newZContext*(option: ZContextOptions, optval: int): ZContext =
   ## Create a new ZContext and set its options
   result = newZContext()
   if result.ctx_set(option.cint, optval.cint) != 0:
@@ -55,7 +63,11 @@ proc newZContext*(option: int, optval: int): ZContext =
 
 proc newZContext*(numthreads: int): ZContext =
   ## Create a new ZContext with a thread pool set to ``numthreads``
-  result = newZContext(ZMQ_IO_THREADS, numthreads)
+  result = newZContext(IO_THREADS, numthreads)
+
+proc setOpt*(ctx: ZContext; option: ZContextOptions; optval: int): bool =
+  if ctx.ctx_set(option.cint, optval.cint) != 0:
+    zmqError()
 
 proc terminate*(ctx: ZContext) =
   ## Terminate the ZContext
